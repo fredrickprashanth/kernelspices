@@ -45,9 +45,8 @@ static int klm_seq_file_init(void) {
 
 	//create /proc/junk
 	struct proc_dir_entry *junk_proc_entry;
-	junk_proc_entry = create_proc_entry(PROC_NAME, 0666, NULL);
+	junk_proc_entry = proc_create(PROC_NAME, 0666, NULL, &junk_proc_fops);
 	if(junk_proc_entry){
-		junk_proc_entry->proc_fops = &junk_proc_fops;
 		printk(KERN_INFO "created proc %s entry\n", PROC_NAME);
 	}
 	return 0;

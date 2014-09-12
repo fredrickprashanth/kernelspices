@@ -6,7 +6,9 @@ obj-m += klm_sched_tp.o klm_delay.o klm_delay_spec.o klm_ratelimit.o klm_ptime.o
 obj-m += klm_stk_ofl.o klm_hydra.o klm_mem_balloon.o klm_sb_cached_inodes.o
 obj-m += klm_double_free.o klm_mutex.o klm_ioremap_test.o
 
-KERNEL_DIR = /work/kernels/linux-2.6-stable
+
+RUNNING_KVER=$(shell uname -r)
+KERNEL_DIR=/lib/modules/$(RUNNING_KVER)/build
 
 all:
 	$(MAKE) -C $(KERNEL_DIR) M=$(PWD) modules

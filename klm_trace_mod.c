@@ -1,6 +1,7 @@
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/proc_fs.h>
+#include <linux/seq_file.h>
 #include "klm_trace_mod.h"
 #define CREATE_TRACE_POINTS
 
@@ -23,27 +24,47 @@ int count, int *eof, void *data){
 	*eof = 1;
 	return sprintf(page, "%s\n", msg);
 }
-int proc_tp_write(struct file *file, const char __user *buffer,
-unsigned long nbytes, void *data){
+
+static ssize_t proc_tp_write(struct file *file, const char __user *buffer,
+size_t count, loff_t *ppos){
 	char msg[64];
 	sscanf(buffer, "%s", msg);
 	trace_proc_tp_write(msg);
 	pr_debug("proc_write msg=%s\n",msg);
-	return nbytes;
+	return count;
 }
+
+
+static int
+proc_tp_show(struct seq_file *s, void *unused) {
+	char *msg = "READ";
+	trace_proc_tp_read(msg);
+	pr_debug("proc_read done\n");
+	seq_printf(s, "%s\n", msg);
+	return 0;
+}
+
+static int
+proc_tp_open(struct inode *inode, struct file *file) {
+	return single_open(file, proc_tp_show, inode);
+}
+
+static struct file_operations proc_tp_fops = {
+	.open = proc_tp_open,
+	.read = seq_read,
+	.write = proc_tp_write,
+	.release = single_release,
+};
 
 static struct proc_dir_entry *proc_tp_entry;
 static int trace_mod_init(void){
 
-	proc_tp_entry = create_proc_entry("proc_tp", 0666, NULL);
+	proc_tp_entry = proc_create("proc_tp", 0666, NULL, &proc_tp_fops);
 	if(!proc_tp_entry)
 	{
 		pr_debug("Could not create proc proc_tp\n");
 		return 0;
 	}
-	proc_tp_entry->write_proc = proc_tp_write;
-	proc_tp_entry->read_proc = proc_tp_read;
-	proc_tp_entry->data = NULL;
 
 	WARN_ON(register_trace_proc_tp_read(proc_tp_read_probe, NULL));
 	WARN_ON(register_trace_proc_tp_write(proc_tp_write_probe, NULL));

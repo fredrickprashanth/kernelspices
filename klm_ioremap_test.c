@@ -1,22 +1,21 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/proc_fs.h>
+#include <linux/seq_file.h>
 #include <asm/uaccess.h>
-
 
 static unsigned long ioremap_addr;
 static int ioremap_size;
 volatile char *ioremap_ptr;
 
-
 #define MAX_SZ 64
-static int
-ioremap_test_proc_write(struct file *file, const char __user *buf_usr,
-	unsigned long nbytes, void *data) {
+static ssize_t
+ioremap_test_fwrite(struct file *file, const char __user *buf_usr,
+	size_t nbytes, loff_t *off) {
 	
 	char buf[MAX_SZ];
 	if (strncpy_from_user(buf, buf_usr, sizeof(buf)) <0)
-		return EFAULT;
+		return -EFAULT;
 
 	if (ioremap_ptr) {
 		iounmap(ioremap_ptr);
@@ -33,33 +32,38 @@ ioremap_test_proc_write(struct file *file, const char __user *buf_usr,
 	return nbytes;
 }
 static int
-ioremap_test_proc_read(char *page, char **start, off_t off,
-	int count, int *eof, void *data) {
+ioremap_test_seq_show(struct seq_file *s, void *unused) {
 	
-	int i;
-
 	if (!ioremap_ptr)
 		return 0;
 
-	for (i = 0; i<ioremap_size; i++)
-		page[i] = ioremap_ptr[i];
-	*eof = 1;
-	return ioremap_size;
+	seq_write(s, ioremap_ptr, ioremap_size);
+
+	return 0;
 } 
 
-struct proc_dir_entry*
-ioremap_test_proc_entry;
+static int
+ioremap_test_open(struct inode *inode, struct file* file) {
+	return single_open(file, ioremap_test_seq_show, inode);
+}
+
+struct proc_dir_entry* ioremap_test_proc_entry;
+
+static struct file_operations ioremap_test_fops = {
+	.open = ioremap_test_open,
+	.read = seq_read,
+	.write = ioremap_test_fwrite,
+	.release = seq_release,
+};
 
 static int
 klm_ioremap_test_init(void) {
 	ioremap_test_proc_entry = 
-		create_proc_entry("ioremap_test", 0666, NULL);	
+		proc_create("ioremap_test", 0666, NULL, &ioremap_test_fops);	
 	if (!ioremap_test_proc_entry) {
 		printk(KERN_EMERG "ioremap_test proc entry create failed\n");
 		return 0;	
 	}
-	ioremap_test_proc_entry->read_proc = ioremap_test_proc_read;
-	ioremap_test_proc_entry->write_proc = ioremap_test_proc_write;
 	return 0;
 }
 

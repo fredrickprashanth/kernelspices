@@ -4,6 +4,9 @@
 #include <linux/proc_fs.h>
 #include <linux/spinlock.h>
 #include <linux/kthread.h>
+#include <linux/sched.h>
+#include <linux/sched/rt.h>
+#include <linux/seq_file.h>
 
 MODULE_LICENSE("GPL");
 
@@ -28,7 +31,7 @@ delay_thread(void *data){
 }
 
 int delay_spec_proc_write(struct file *file, const char __user *buffer, 
-unsigned long nbytes, void *data){
+size_t count, loff_t *ppos){
 	int secs = 0, cpu = 0;
 	struct task_struct *delay_thread_task;
 	char *p = buffer;
@@ -37,7 +40,7 @@ unsigned long nbytes, void *data){
 	pr_info("delay_spec secs=%d", secs);
 	if(secs<0 || secs>100){
 		pr_err("invalid values\n");
-		return nbytes;
+		return count;
 	}
 	while(*p++!=' ');
 	while(*p)
@@ -54,26 +57,38 @@ unsigned long nbytes, void *data){
 
 		while(*p && *p++!=' ');
 	}
-	return nbytes;
+	return count;
 	
 }
 
-int delay_spec_proc_read(char *page, char **start, off_t off,
-int count, int *eof, void *data){
-	return sprintf(page, "%s\n", "delay_spec_proc is ready");
-} 
+
+static int
+delay_spec_proc_show(struct seq_file *seq, void *unused) {
+	seq_printf(seq, "delay_spec_proc is ready\n");
+	return 0;
+}
+
+int
+delay_spec_proc_open(struct inode *inode, struct file *file) {
+	return single_open(file, delay_spec_proc_show, inode);
+}
+
+struct file_operations delay_spec_proc_fops = {
+	.owner = THIS_MODULE,
+	.open = delay_spec_proc_open,
+	.read = seq_read,
+	.write = delay_spec_proc_write,
+};
+	
 static struct proc_dir_entry *delay_spec_proc_entry;
 static int
 klm_delay_spec_init(void){
 
-	delay_spec_proc_entry = create_proc_entry("delay_spec", 0666, NULL);
+	delay_spec_proc_entry = proc_create("delay_spec", 0666, NULL, &delay_spec_proc_fops);
 	if(!delay_spec_proc_entry){
 		pr_debug("Could not create delay_spec proc entry\n");
 		return 0;
 	}
-	delay_spec_proc_entry->write_proc = delay_spec_proc_write;
-	delay_spec_proc_entry->read_proc = delay_spec_proc_read;
-	delay_spec_proc_entry->data = NULL;
 	return 0;
 }
 

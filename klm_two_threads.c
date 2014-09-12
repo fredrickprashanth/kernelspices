@@ -2,6 +2,7 @@
 #include<linux/kthread.h>
 #include<linux/kernel.h>
 #include<linux/sched.h>
+#include<linux/sched/rt.h>
 #include<linux/delay.h>
 
 MODULE_LICENSE("GPL");

@@ -8,15 +8,16 @@ static void
 list_sb_cached_inodes(struct super_block *sb, void *unused)
 {
         struct inode *inode;
+	struct hlist_node *hnode;
 
         list_for_each_entry(inode, &sb->s_inodes, i_sb_list) {
                 if (inode->i_state & (I_FREEING|I_WILL_FREE|I_NEW))
                         continue;
                 if (inode->i_mapping->nrpages == 0)
                         continue;
-		if(list_is_singular(&inode->i_dentry))
+		hlist_for_each(hnode, &inode->i_dentry)
 		{
-			struct dentry *d = list_entry(inode->i_dentry.next,struct dentry, d_alias);
+			struct dentry *d = hlist_entry(hnode, struct dentry, d_alias);
 			printk(KERN_DEBUG "%s\n", d->d_name.name);
 		}
         }

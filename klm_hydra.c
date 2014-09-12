@@ -4,6 +4,8 @@
 #include <linux/proc_fs.h>
 #include <linux/spinlock.h>
 #include <linux/kthread.h>
+#include <linux/seq_file.h>
+#include <asm/uaccess.h>
 
 MODULE_LICENSE("GPL");
 
@@ -27,12 +29,17 @@ hydra_thread(void *data){
 	return 0;
 }
 
-int hydra_proc_write(struct file *file, const char __user *buffer, 
-unsigned long nbytes, void *data){
+ssize_t hydra_fwrite(struct file *file, const char __user *user_buffer,
+		     size_t nbytes, loff_t *off) 
+{
 	int secs = 0, cpu = 0;
 	struct task_struct *hydra_thread_task;
-	const char __user *p = buffer;
+	char buffer[255], *p;
 
+	if (copy_from_user(buffer, user_buffer, sizeof(buffer)))
+		return -EFAULT;
+
+	p = buffer;
 	sscanf(buffer, "%d", &secs);
 	pr_info("hydra secs=%d", secs);
 	if(secs<0 || secs>100){
@@ -58,22 +65,35 @@ unsigned long nbytes, void *data){
 	
 }
 
-int hydra_proc_read(char *page, char **start, off_t off,
-int count, int *eof, void *data){
-	return sprintf(page, "%s\n", "hydra_proc is ready");
-} 
+
+static int
+hydra_seq_show(struct seq_file *s, void *unused) {
+	seq_printf(s, "hdyra is ready.\n");
+	return 0;
+}
+
+static int
+hydra_fopen(struct inode *inode, struct file *file) {
+	return single_open(file, hydra_seq_show, inode);	
+}
+
+struct file_operations hydra_fops = {
+	.open = hydra_fopen,
+	.read = seq_read,
+	.write = hydra_fwrite,
+	.release = single_release,
+};
+
 static struct proc_dir_entry *hydra_proc_entry;
+
 static int
 klm_hydra_init(void){
 
-	hydra_proc_entry = create_proc_entry("hydra", 0666, NULL);
+	hydra_proc_entry = proc_create("hydra", 0666, NULL, &hydra_fops);
 	if(!hydra_proc_entry){
 		pr_debug("Could not create hydra proc entry\n");
 		return 0;
 	}
-	hydra_proc_entry->write_proc = hydra_proc_write;
-	hydra_proc_entry->read_proc = hydra_proc_read;
-	hydra_proc_entry->data = NULL;
 	return 0;
 }
 

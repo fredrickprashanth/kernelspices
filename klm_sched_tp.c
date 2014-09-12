@@ -1,6 +1,7 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/sched.h>
+#include <linux/sched/rt.h>
 #include <linux/ftrace.h>
 #include <trace/events/sched.h>
 

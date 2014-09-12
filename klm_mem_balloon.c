@@ -3,7 +3,10 @@
 #include <linux/gfp.h>
 #include <linux/proc_fs.h>
 #include <linux/mm.h>
+#include <linux/slab.h>
 #include <linux/list.h>
+#include <linux/seq_file.h>
+#include <asm/uaccess.h>
 
 
 MODULE_LICENSE("GPL");
@@ -48,7 +51,6 @@ do_deflate(int reqs)
 {
 	struct inflate_req *inf_req;
 	int order;
-	int i;
 	if(!list_empty(&inflate_req_list))
 	{
 		while(!list_empty(&inflate_req_list) && (reqs == -99 || reqs-->0) )
@@ -65,12 +67,17 @@ do_deflate(int reqs)
 	printk(KERN_EMERG "mem_balloon: is empty\n");
 }
 	
-int
-mem_balloon_entry_write(struct file *filep, const char __user *buffer,
-	unsigned long nbytes, void *data)
+ssize_t
+mem_balloon_fwrite(struct file *filep, const char __user *user_buffer,
+	size_t nbytes, loff_t *off)
 {
 	char cmd[32];
 	int option;
+	char buffer[256];
+
+	if (copy_from_user(buffer, user_buffer, sizeof(buffer)))
+		return -EFAULT;
+
 	sscanf(buffer, "%s %d", cmd, &option);
 	
 	if(!strcmp(cmd, CMD_INFLATE))
@@ -93,8 +100,7 @@ mem_balloon_entry_write(struct file *filep, const char __user *buffer,
 
 
 int
-mem_balloon_entry_read(char *page, char **start, off_t off,
-int count, int *eof, void *data)
+mem_balloon_seq_show(struct seq_file *s, void *unused)
 {
 	unsigned long total_pages = 0, nr_pages;
 	
@@ -104,25 +110,34 @@ int count, int *eof, void *data)
 			nr_pages = 1<<inf_req->order;
 			total_pages += nr_pages;
 	}
-	return sprintf(page, "mem_balloon has %lu pages\n", total_pages);
-
+	seq_printf(s, "mem_balloon has %lu pages\n", total_pages);
+	return 0;
 }
 
+static int
+mem_balloon_fopen(struct inode* inode, struct file *file) {
+	return single_open(file, mem_balloon_seq_show, inode);
+}
+
+
+static struct file_operations mem_balloon_fops = {
+	.open = mem_balloon_fopen,
+	.read = seq_read,
+	.write = mem_balloon_fwrite,
+	.release = single_release,
+};
 
 static struct proc_dir_entry *mem_balloon_entry;
 
 static int 
 mem_balloon_init(void){
 
-	mem_balloon_entry = create_proc_entry("mem_balloon", 0666, NULL);
+	mem_balloon_entry = proc_create("mem_balloon", 0666, NULL, &mem_balloon_fops);
 	if(!mem_balloon_entry)
 	{
 		printk(KERN_DEBUG "could not create mem_balloon entry\n");
 		return 0;
 	}
-	mem_balloon_entry->write_proc = mem_balloon_entry_write;
-	mem_balloon_entry->read_proc = mem_balloon_entry_read;
-	mem_balloon_entry->data = NULL;
 	return 0;
 }
 	
